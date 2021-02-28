@@ -25,6 +25,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
+require 'json'
 require 'socket'
 
 puts "=== Loading GStreamer gem ==="
@@ -56,6 +57,8 @@ class Application
     @mid_gain = 0
     @treble_gain = 0
     @done = false
+
+    @bands = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     note "Setting audio device parameters"
     # XXX not sure if we can figure this out automatically?
@@ -145,16 +148,28 @@ class Application
     @raw_audio_parse.set_property("sample-rate", 48000)
     @raw_audio_parse.set_property("num-channels", 1)
 
-    @eq = Gst::ElementFactory.make("equalizer-3bands", "eq")
-    set_bass(0)
-    set_mid(0)
-    set_treble(0)
+    #@eq = Gst::ElementFactory.make("equalizer-3bands", "eq")
+    #set_bass(0)
+    #set_mid(0)
+    #set_treble(0)
+    @eq = Gst::ElementFactory.make("equalizer-10bands", "eq")
+    @eq.set_property("band0", 12)
+    @eq.set_property("band1", 10)
+    @eq.set_property("band2", 8)
+    @eq.set_property("band3", 6)
+    @eq.set_property("band4", 4)
+    @eq.set_property("band5", 2)
+    @eq.set_property("band6", 1)
+    @eq.set_property("band7", 0)
+    @eq.set_property("band8", 0)
+    @eq.set_property("band9", 0)
 
     @audioconvert = Gst::ElementFactory.make("audioconvert", "audioconvert")
     @audioresample = Gst::ElementFactory.make("audioresample", "audioresample")
 
-    @sink = Gst::ElementFactory.make("filesink", "sink")
-    @sink.set_property("location", SOUND_DEVICE)
+    @sink = Gst::ElementFactory.make("jackaudiosink", "sink")
+    @sink.server = "punkychow"
+    @sink.connect = 0
   end
 
   def pipeline_elements
@@ -193,23 +208,21 @@ class Application
         msg = client.gets.chomp
         ok = true
 
-        case msg
-        when "bassup"
-          set_bass(@bass_gain+1)
-        when "bassdown"
-          set_bass(@bass_gain-1)
-        when "midup"
-          set_mid(@mid_gain+1)
-        when "middown"
-          set_mid(@mid_gain-1)
-        when "trebleup"
-          set_treble(@treble_gain+1)
-        when "trebledown"
-          set_treble(@treble_gain-1)
-        when "flat"
-          set_bass(0)
-          set_mid(0)
-          set_treble(0)
+	req = JSON.parse(msg)
+
+	case req["method"]
+	when "volumeup"
+	  Thread.new { system %Q(mixerctl -w outputs.speaker++) }
+	when "volumedown"
+	  Thread.new { system %Q(mixerctl -w outputs.speaker--) }
+        when "inputup"
+	  Thread.new { system %Q(mixerctl -w record.mic++) }
+	when "inputdown"
+	  Thread.new { system %Q(mixerctl -w record.mix--) }
+	when "set"
+	  param = req["param"]
+	  value = req["value"]
+	  @eq.set_property(param, value)
         else
           $stderr.puts(">> unknown message: #{msg.inspect}")
           ok = false
