@@ -106,6 +106,7 @@ class Application
     report_version
     create_elements
     create_pipeline
+    jack_attach
     create_control_thread
   end
 
@@ -148,10 +149,6 @@ class Application
     @raw_audio_parse.set_property("sample-rate", 48000)
     @raw_audio_parse.set_property("num-channels", 1)
 
-    #@eq = Gst::ElementFactory.make("equalizer-3bands", "eq")
-    #set_bass(0)
-    #set_mid(0)
-    #set_treble(0)
     @eq = Gst::ElementFactory.make("equalizer-10bands", "eq")
     @eq.set_property("band0", 12)
     @eq.set_property("band1", 10)
@@ -168,8 +165,8 @@ class Application
     @audioresample = Gst::ElementFactory.make("audioresample", "audioresample")
 
     @sink = Gst::ElementFactory.make("jackaudiosink", "sink")
-    @sink.server = "punkychow"
-    @sink.connect = 0
+    @sink.set_property("server", "punkychow")
+    @sink.set_property("connect", 0)
   end
 
   def pipeline_elements
@@ -198,6 +195,12 @@ class Application
       # XXX is there such thing as EOF/EOS with /dev/sound ??
       true
     end
+  end
+
+  def jack_attach
+    # XXX hmm, need a helper script?
+    # er, actually we need to wait for this jack-client to be 'ready' somehow
+    #system %Q(JACK_DEFAULT_SERVER=punkychow jack_connect #{File.basename($0)}:out_sink_1 system:playback_1)
   end
 
   def create_control_thread
